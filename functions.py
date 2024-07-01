@@ -26,9 +26,9 @@ def load_and_clean_all_data(data_dir: str) -> dict:
     datasets = {
         'basics': 'title.basics.tsv',
         'akas': 'title.akas.tsv',
-        'crew': 'title.crew.tsv',
+        # 'crew': 'title.crew.tsv',
         'ratings': 'title.ratings.tsv',
-        'names': 'name.basics.tsv'
+        # 'names': 'name.basics.tsv'
     }
 
     data = {}
@@ -66,42 +66,83 @@ def merge_datasets(dfs, keys):
     merged_df = dfs[0]
     for i in range(1, len(dfs)):
         merged_df = pd.merge(merged_df, dfs[i], left_on=keys[i - 1][0], right_on=keys[i - 1][1])
+    print(f"Merged dataset size: {merged_df.shape}")
     return merged_df
 
 
 def filter_movies(merged_df):
     """Filter the merged dataset to include only movies."""
     movies_df = merged_df[merged_df['titleType'] == 'movie']
+    # movies_df = movies_df[movies_df['isOriginalTitle'] == 1]
+    print(f"Filtered dataset size: {movies_df.shape}")
     return movies_df
 
 
-def get_top_n_movies(movies_df, top_n):
-    """Select the top N movies based on average rating."""
-    top_movies_df = movies_df.sort_values(by='averageRating', ascending=False).head(top_n)
-    return top_movies_df
+def get_movie_country(title_akas):
+    """
+    Establish the country of origin for each movie, ensuring rows with isOriginalTitle = 1 have a region code.
+
+    Parameters:
+    title_akas (pd.DataFrame): DataFrame containing title.akas data.
+
+    Returns:
+    pd.DataFrame: DataFrame with columns ['titleId', 'country'].
+    """
+    # Filter to original titles
+    original_titles = title_akas[title_akas['isOriginalTitle'] == 1][['titleId', 'region', 'isOriginalTitle']]
+
+    # Find missing regions
+    missing_regions = original_titles['region'].isna()
+
+    # Fill missing regions by looking at other rows with the same titleId
+    if missing_regions.any():
+        # Create a DataFrame with titleId and non-missing region
+        non_missing_regions = title_akas[['titleId', 'region']].dropna().drop_duplicates('titleId')
+
+        # Merge to fill missing regions in original titles
+        original_titles = original_titles.merge(non_missing_regions, on='titleId', how='left', suffixes=('', '_fill'))
+
+        # Use the filled regions where necessary
+        original_titles['region'] = original_titles['region'].combine_first(original_titles['region_fill'])
+
+        # Drop the temporary fill column
+        original_titles.drop(columns=['region_fill'], inplace=True)
+
+    # Filter out rows with missing regions
+    original_titles = original_titles.dropna(subset=['region'])
+
+    # Rename 'region' column to 'country'
+    original_titles.rename(columns={'region': 'country'}, inplace=True)
+
+    return original_titles[['titleId', 'country']]
 
 
-def calculate_country_quality(top_movies_df):
-    """Calculate the quality scores by country."""
-    country_quality = top_movies_df.groupby('region').agg(
-        avg_rating=('averageRating', 'mean'),
-        total_votes=('numVotes', 'sum')
-    ).reset_index()
-    country_quality['composite_score'] = (country_quality['avg_rating'] * 0.7) + (country_quality['total_votes'] * 0.3)
-    country_quality = country_quality.sort_values(by='composite_score', ascending=False)
-    return country_quality
+def calculate_composite_score(movies_df):
+    """Calculate the composite score for each movie."""
+    movies_df['composite_score'] = (movies_df['averageRating'] * 0.7) + (movies_df['numVotes'] * 0.3)
+    return movies_df
 
 
-def quality_of_movies_by_country(data, top_n):
+def count_country_appearances(top_movies_df, top_orders):
+    """Count how many times each country appears in the specified top N sequences."""
+    country_counts = {}
+    for n in top_orders:
+        top_n_movies = top_movies_df.head(n)
+        counts = top_n_movies['country'].value_counts().to_dict()
+        country_counts[n] = counts
+    return country_counts
+
+
+def quality_of_movies_by_country(data, top_orders):
     """
     Main function to analyze the quality of movies by country.
 
     Parameters:
     data (dict): Dictionary of DataFrames containing IMDb data.
-    top_n (int): Number of top movies to analyze.
+    top_orders (list): List of top N orders to analyze.
 
     Returns:
-    pd.DataFrame: DataFrame containing the quality scores by country.
+    dict: Dictionary containing counts of country appearances in specified top N sequences.
     """
     # Merge the relevant datasets
     merged_df = merge_datasets([data['basics'], data['ratings'], data['akas']],
@@ -110,33 +151,49 @@ def quality_of_movies_by_country(data, top_n):
     # Filter the merged dataset to include only movies
     movies_df = filter_movies(merged_df)
 
-    # Select the top N movies
-    top_movies_df = get_top_n_movies(movies_df, top_n)
+    # Get the country of origin for each movie
+    country_df = get_movie_country(data['akas'])
+    movies_df = pd.merge(movies_df, country_df, left_on='tconst', right_on='titleId')
+    movies_df = movies_df[movies_df['isOriginalTitle'] == 1]
+    print(f"Size of movies_df after country assignment: {movies_df.shape}")
 
-    # Calculate the quality scores by country
-    country_quality = calculate_country_quality(top_movies_df)
+    # Calculate the composite score for each movie
+    movies_df = calculate_composite_score(movies_df)
 
-    return country_quality
+    # Sort movies by composite score
+    movies_df = movies_df.sort_values(by='composite_score', ascending=False)
+    columns_to_display = ['tconst', 'primaryTitle', 'originalTitle', 'averageRating', 'country', 'composite_score']
+    print(movies_df[columns_to_display].head())
+
+    # Count country appearances in specified top N sequences
+    country_counts = count_country_appearances(movies_df, top_orders)
+
+    return country_counts
 
 
 if __name__ == "__main__":
     import argparse
+    import json
 
     parser = argparse.ArgumentParser(
         description="Load and clean IMDb datasets and analyze the quality of movies by country.")
     parser.add_argument("data_dir", type=str, help="Directory containing the raw data files.")
     parser.add_argument("output_dir", type=str, help="Directory to save the cleaned data files and results.")
-    parser.add_argument("--top_n", type=int, default=200, help="Number of top movies to analyze.")
+    parser.add_argument("--top_orders", type=int, nargs='+', default=[10, 20, 100, 200],
+                        help="List of top N orders to analyze.")
 
     args = parser.parse_args()
 
+    # Load and clean the data
+    data = load_and_clean_all_data(args.data_dir)
+
     # Analyze the quality of movies by country
-    country_quality = quality_of_movies_by_country(args.data_dir, args.top_n)
+    country_counts = quality_of_movies_by_country(data, args.top_orders)
 
     # Save the results
-    output_path = os.path.join(args.output_dir, "country_quality.csv")
-    country_quality.to_csv(output_path, index=False)
+    counts_output_path = os.path.join(args.output_dir, "country_counts.json")
+    with open(counts_output_path, 'w') as f:
+        json.dump(country_counts, f)
 
     # Save cleaned data
-    data = load_and_clean_all_data(args.data_dir)
     save_clean_data(data, args.output_dir)

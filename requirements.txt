@@ -3,3 +3,4 @@ numpy
 argparse
 pytest
 jupyter
+json
