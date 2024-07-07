@@ -1,11 +1,13 @@
 import pytest
 import pandas as pd
-from functions import load_data, clean_data
+from utilities import load_data, clean_data
+
 
 def test_load_data():
     df = load_data('data/title.basics.tsv.gz')
     assert isinstance(df, pd.DataFrame)
     assert not df.empty
+
 
 def test_clean_data():
     df = pd.DataFrame({
