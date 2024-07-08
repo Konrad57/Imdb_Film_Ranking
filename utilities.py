@@ -3,14 +3,25 @@ import os
 from task1_functions import quality_of_movies_by_country
 
 
-def load_data(file_path: str) -> pd.DataFrame:
-    """Load a TSV file into a pandas DataFrame."""
+def load_data(file_path: str, header=0) -> pd.DataFrame:
+    """Load a CSV or TSV file into a pandas DataFrame."""
     try:
         print(f'Loading data from: {file_path} ...')
-        df = pd.read_csv(file_path, sep='\t', low_memory=False)
+        file_extension = os.path.splitext(file_path)[1].lower()
+
+        if file_extension == '.tsv':
+            df = pd.read_csv(file_path, sep='\t', low_memory=False)
+        elif file_extension == '.csv':
+            df = pd.read_csv(file_path, sep=',', low_memory=False, header=header)
+        else:
+            raise ValueError("Unsupported file format. Please provide a .csv or .tsv file.")
+
         return df
     except FileNotFoundError:
         print(f"Error: The file {file_path} was not found.")
+        raise
+    except ValueError as ve:
+        print(f"Error: {ve}")
         raise
     except Exception as e:
         print(f"Error loading file {file_path}: {e}")
