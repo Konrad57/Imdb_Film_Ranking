@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from task1_functions import quality_of_movies_by_country
+from functions.task1_functions import quality_of_movies_by_country
 
 
 def load_data(file_path: str, header=0) -> pd.DataFrame:
@@ -29,8 +29,16 @@ def load_data(file_path: str, header=0) -> pd.DataFrame:
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Perform basic data cleaning."""
+    """Perform basic data cleaning and detect inconsistencies."""
     df.replace({'\\N': pd.NA}, inplace=True)
+
+    # Example inconsistency check: Missing values in critical columns
+    critical_columns = ['tconst', 'titleType', 'primaryTitle']
+    for column in critical_columns:
+        if df[column].isna().any():
+            num_missing = df[column].isna().sum()
+            print(f"Warning: {num_missing} missing values detected in '{column}' column.")
+
     return df
 
 
