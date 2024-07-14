@@ -82,7 +82,7 @@ def sort_by_column_and_select(df, sort_column, target_columns):
     return df_filtered
 
 
-def filter_countries_with_reference(df, col_name, reference_df, reference_column):
+def filter_countries_with_reference(df, col_name, reference_df, reference_column, year='2023'):
     """ Filters a pandas dataframe to keep only rows with countries present in a reference list.
 
   Args:
@@ -90,6 +90,7 @@ def filter_countries_with_reference(df, col_name, reference_df, reference_column
       col_name (str, optional): The name of the column containing countries/regions in df.
       reference_df (pandas.DataFrame): The already loaded pandas dataframe containing the reference list of countries.
       reference_column (str): The name of the column from which to filter the reference list.
+      year (str): The year from which to filter the reference list. NOTE: str
 
   Returns:
       pandas.DataFrame: A new dataframe containing only rows with countries present in the reference list.
@@ -102,7 +103,7 @@ def filter_countries_with_reference(df, col_name, reference_df, reference_column
     df_filtered = df[df[col_name].isin(reference_countries)]
 
     # Sort and select columns (assuming sort_by_column_and_select function exists)
-    df_filtered = sort_by_column_and_select(df_filtered, '2023', ['Country Name', '2023'])
+    df_filtered = sort_by_column_and_select(df_filtered, year, ['Country Name', year])
 
     return df_filtered
 
@@ -140,13 +141,14 @@ def get_countries_and_clean_orders(df, merge_df, merge_col_left, merge_col_right
     return processed_df, missing_values['country'].tolist()
 
 
-def calculate_gdp_per_population(gdp_df, population_df):
+def calculate_gdp_per_population(gdp_df, population_df, year):
     """
   Calculates GDP per population for each country and returns a new DataFrame.
 
   Args:
       gdp_df (pd.DataFrame): DataFrame containing countries and GDP values.
       population_df (pd.DataFrame): DataFrame containing countries and population values.
+      year (str): The year the gdp and population values to be taken from. NOTE: str
 
   Returns:
       pd.DataFrame: A new DataFrame with countries and GDP per population.
@@ -154,8 +156,8 @@ def calculate_gdp_per_population(gdp_df, population_df):
 
     # Create a dictionary with country as key and gdp/population as value
     gdp_pop_dict = {
-        country: gdp_df[gdp_df['Country Name'] == country]['2023'].values[0] /
-                 population_df[population_df['Country Name'] == country]['2023'].values[0]
+        country: gdp_df[gdp_df['Country Name'] == country][year].values[0] /
+                 population_df[population_df['Country Name'] == country][year].values[0]
         for country in gdp_df['Country Name'].unique()
     }
 

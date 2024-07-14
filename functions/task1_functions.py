@@ -24,6 +24,14 @@ def filter_movies(merged_df):
     return movies_df
 
 
+def prepare_data(basics, ratings, akas):
+
+    merged_df = merge_datasets(basics, ratings, akas)
+    movies_df = filter_movies(merged_df)
+
+    return movies_df
+
+
 def calculate_composite_score(movies_df):
     """Calculate the composite score for each movie."""
     if 'averageRating' not in movies_df.columns or 'numVotes' not in movies_df.columns:
@@ -89,7 +97,7 @@ def count_country_appearances(top_movies_df, top_orders):
     return country_counts
 
 
-def quality_of_movies_by_country(basics, ratings, akas, top_orders):
+def quality_of_movies_by_country(movies_df, top_orders):
     """
     Main function to analyze the quality of movies by country.
 
@@ -104,8 +112,6 @@ def quality_of_movies_by_country(basics, ratings, akas, top_orders):
         - country_counts (dict): Dictionary containing counts of country appearances in specified top N sequences.
         - movies_df (pd.DataFrame): DataFrame of movies with additional country and composite score information.
     """
-    merged_df = merge_datasets(basics, ratings, akas)
-    movies_df = filter_movies(merged_df)
 
     country_df = get_movie_country(movies_df)
     movies_df = pd.merge(movies_df, country_df, left_on='tconst', right_on='titleId')

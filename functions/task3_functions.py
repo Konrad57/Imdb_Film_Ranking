@@ -79,16 +79,17 @@ def custom_ranking(movies_df, director_column, score_column, good_threshold=8.0,
         # Normalize composite_score to range [0, 10]
         max_score = movies_df['composite_score'].max()
         min_score = movies_df['composite_score'].min()
-        movies_df['composite_score'] = ((movies_df['composite_score'] - min_score) / (max_score - min_score)) * 10
+        movies_df.loc[:, 'composite_score'] = ((movies_df['composite_score'] - min_score) / (
+                    max_score - min_score)) * 10
 
     # Calculate custom scores
-    movies_df['custom_score'] = movies_df[score_column].apply(
+    movies_df.loc[:, 'custom_score'] = movies_df[score_column].apply(
         lambda x: abs(x) - bad_threshold if abs(x) <= bad_threshold
         else (abs(x) - bad_threshold) * 2 if abs(x) <= good_threshold
         else (abs(x) - bad_threshold) * 3)
 
     # Count total number of movies for each director
-    movies_df['total_movies'] = movies_df.groupby(director_column)['tconst'].transform('count')
+    movies_df.loc[:, 'total_movies'] = movies_df.groupby(director_column)['tconst'].transform('count')
 
     # Group by the director column and aggregate the custom scores
     aggregated_scores = movies_df.groupby(director_column).agg({
@@ -103,3 +104,29 @@ def custom_ranking(movies_df, director_column, score_column, good_threshold=8.0,
     aggregated_scores = aggregated_scores.sort_values('rank').reset_index(drop=True)
 
     return aggregated_scores
+
+
+def rank_director_actors(movies_df, director_column, score_column, profession_column='primaryProfession',
+                         good_threshold=8.0, bad_threshold=5.0):
+    """
+    Filter directors who are also actors and rank them using a custom scoring metric.
+
+    Args:
+    movies_df (pd.DataFrame): DataFrame containing the director, score, and profession columns.
+    director_column (str): The column name of the director.
+    score_column (str): The column name of the score to rank the directors by.
+    profession_column (str): The column name containing professions.
+    good_threshold (float): Threshold above which a movie is considered 'good'.
+    bad_threshold (float): Threshold below which a movie is considered 'bad'.
+
+    Returns:
+    pd.DataFrame: A DataFrame with 'director', 'custom_score', 'rank', and 'total_movies' columns.
+    """
+    # Filter directors who are also actors
+    actor_directors_df = movies_df[movies_df[profession_column].str.contains('actor', case=False, na=False)].copy()
+
+    # Apply custom ranking to the filtered subset
+    ranked_actor_directors = custom_ranking(actor_directors_df, director_column, score_column, good_threshold,
+                                            bad_threshold)
+
+    return ranked_actor_directors

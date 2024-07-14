@@ -1,5 +1,4 @@
 pandas
 numpy
 argparse
-pytest
 jupyter
